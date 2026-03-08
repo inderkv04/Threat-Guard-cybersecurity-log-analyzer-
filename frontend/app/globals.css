@@ -1,0 +1,29 @@
+@import "tailwindcss";
+
+:root {
+  --background: #F8F9FA;
+  --foreground: #333333;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Dashboard & card helpers */
+.dashboard-grid {
+  border-spacing: 0;
+}
+
+.dashboard-grid th,
+.dashboard-grid td {
+  padding: theme("spacing.3") theme("spacing.4") theme("spacing.3") 0;
+}

@@ -61,7 +61,6 @@ Alerts are stored with:
 * `alert_type`
 * `reason`
 * `confidence_score`
-* associated `log_entry_id` (when applicable)
 
 ---
 
@@ -167,15 +166,6 @@ The system stores data in PostgreSQL with the following main tables:
 * `alerts`
 
 Large uploads are processed in batches to avoid large database transactions.
-
----
-
-# Future Improvements
-
-* Machine learning based anomaly detection
-* Behavioral profiling per IP address
-* Real-time alert streaming
-* Dashboard for security analysts
 
 ---
 

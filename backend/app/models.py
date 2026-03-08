@@ -1,12 +1,6 @@
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, func
 from sqlalchemy.orm import relationship
-from datetime import datetime, timezone
-
 from app.database import Base
-
-
-def _now_utc():
-    return datetime.now(timezone.utc)
 
 
 class User(Base):
@@ -15,7 +9,7 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String, unique=True, index=True)
     password_hash = Column(String)
-    created_at = Column(DateTime(timezone=True), server_default= func.now())
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     logs = relationship("UploadedLog", back_populates="user")
 
@@ -25,7 +19,7 @@ class UploadedLog(Base):
 
     id = Column(Integer, primary_key=True)
     filename = Column(String)
-    upload_time = Column(DateTime(timezone=True), server_default= func.now())
+    upload_time = Column(DateTime(timezone=True), server_default=func.now())
 
     user_id = Column(Integer, ForeignKey("users.id"))
 
@@ -64,6 +58,6 @@ class Alert(Base):
     reason = Column(Text)  # Human-readable explanation for the user
     confidence_score = Column(Integer)
 
-    created_at = Column(DateTime(timezone=True), server_default= func.now())
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     log_entry = relationship("LogEntry", back_populates="alerts")

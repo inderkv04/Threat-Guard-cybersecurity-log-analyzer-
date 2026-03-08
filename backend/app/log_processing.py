@@ -78,12 +78,18 @@ def parse_log_line(line: str) -> Dict[str, Any]:
 
     data = match.groupdict()
 
+    status = data.get("status")
+    try:
+        status_code = int(status) if status else None
+    except (TypeError, ValueError):
+        status_code = None
+
     return {
         "timestamp": _parse_apache_timestamp(data.get("timestamp")),
         "ip_address": data.get("ip"),
         "url": data.get("url"),
         "action": data.get("method"),
-        "status_code": int(data["status"]) if data.get("status") else None,
+        "status_code": status_code,
     }
 
 

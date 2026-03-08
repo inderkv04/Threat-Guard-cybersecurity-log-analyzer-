@@ -51,7 +51,7 @@ export default function LoginPage() {
               Sign in
             </h1>
             <p className="mt-2 text-sm text-zinc-600">
-              Use your admin username and password to access uploads and alerts.
+              Use your username and password to access the dashboard
             </p>
           </div>
 
@@ -65,7 +65,7 @@ export default function LoginPage() {
                 onChange={(e) => setUsername(e.target.value)}
                 autoComplete="username"
                 className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none ring-emerald-200 focus:ring-4"
-                placeholder="admin"
+                placeholder="inder"
               />
             </div>
 
@@ -97,11 +97,6 @@ export default function LoginPage() {
               {status === "loading" ? "Signing in..." : "Sign in"}
             </button>
           </form>
-
-          <div className="mt-6 text-xs text-zinc-500">
-            Tip: If you changed backend credentials, update `APP_USER` / `APP_PASS`
-            in your frontend environment too.
-          </div>
         </div>
       </div>
     </div>

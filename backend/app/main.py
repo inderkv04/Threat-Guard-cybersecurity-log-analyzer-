@@ -1,6 +1,18 @@
+"""
+FastAPI app for the log analyser: upload logs, list uploads, fetch entries/summary/alerts.
+All routes require HTTP Basic auth (APP_USER / APP_PASS). Log processing runs in a worker.
+"""
+import os
+from pathlib import Path
+
+# Load .env from backend directory so APP_USER / APP_PASS are set when not in shell
+_env_path = Path(__file__).resolve().parent.parent / ".env"
+if _env_path.exists():
+    from dotenv import load_dotenv
+    load_dotenv(_env_path)
+
 import json
 import logging
-import os
 import secrets
 from typing import Optional
 
@@ -14,15 +26,25 @@ from app.database import engine, Base, SessionLocal, DATABASE_URL
 from app import models
 from app.redis_client import get_redis, UPLOAD_QUEUE_KEY
 
+# -----------------------------------------------------------------------------
+# Config & logging
+# -----------------------------------------------------------------------------
+
+# Where to store uploaded log files (override with UPLOAD_DIR env)
 UPLOAD_DIR = os.environ.get("UPLOAD_DIR", os.path.join(os.path.dirname(__file__), "..", "uploads"))
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# -----------------------------------------------------------------------------
+# Auth (HTTP Basic)
+# -----------------------------------------------------------------------------
+
 security = HTTPBasic()
 
 
 def require_basic_auth(credentials: HTTPBasicCredentials = Depends(security)) -> str:
+    """Validate APP_USER / APP_PASS; return username on success."""
     expected_user = os.environ.get("APP_USER", "")
     expected_pass = os.environ.get("APP_PASS", "")
     if not expected_user or not expected_pass:
@@ -49,10 +71,10 @@ def startup_message():
 
 
 def _to_iso(value):
+    """Convert datetime (or string) to ISO format for JSON; None stays None."""
     if value is None:
         return None
-    # SQLAlchemy/psycopg2 should return datetime, but older columns or clients
-    # may yield strings; handle both safely for API output.
+    # SQLAlchemy may return datetime or string depending on driver/version
     if hasattr(value, "isoformat"):
         return value.isoformat()
     if isinstance(value, str):
@@ -68,11 +90,15 @@ def _sanitize_filename(filename: str) -> str:
     return base or "upload.log"
 
 
+# -----------------------------------------------------------------------------
+# DB: lazy table creation (allows app to start before Postgres is up)
+# -----------------------------------------------------------------------------
+
 _tables_created = False
 
 
 def _ensure_tables():
-    """Create DB tables on first use so app starts even when Postgres is down."""
+    """Create DB tables on first use. For Postgres, run one-time schema fixes (reason, log_id, index)."""
     global _tables_created
     if _tables_created:
         return
@@ -81,10 +107,11 @@ def _ensure_tables():
         logger.info("Database tables created or already exist")
         if "postgresql" in DATABASE_URL:
             with engine.connect() as conn:
+                # One-time migrations for alerts table (reason, log_id, index, nullable log_entry_id)
                 conn.execute(text("ALTER TABLE alerts ADD COLUMN IF NOT EXISTS reason TEXT"))
                 conn.execute(text("ALTER TABLE alerts ADD COLUMN IF NOT EXISTS log_id INTEGER"))
                 conn.execute(text("CREATE INDEX IF NOT EXISTS ix_alerts_log_id ON alerts (log_id)"))
-                conn.execute(text("ALTER TABLE alerts ALTER COLUMN log_entry_id DROP NOT NULL"))  # allow aggregate alerts (brute force, IP burst)
+                conn.execute(text("ALTER TABLE alerts ALTER COLUMN log_entry_id DROP NOT NULL"))
                 conn.commit()
         _tables_created = True
     except Exception as e:
@@ -92,6 +119,7 @@ def _ensure_tables():
 
 
 def get_db() -> Session:
+    """Dependency: ensure tables exist, yield a DB session, close on exit."""
     _ensure_tables()
     db = SessionLocal()
     try:
@@ -99,6 +127,10 @@ def get_db() -> Session:
     finally:
         db.close()
 
+
+# -----------------------------------------------------------------------------
+# Routes
+# -----------------------------------------------------------------------------
 
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
@@ -149,6 +181,7 @@ async def upload_log_file(
 
     db.commit()
 
+    # Enqueue job for worker (log_id + path)
     payload = {"log_id": uploaded_log.id, "path": abs_path}
     try:
         redis_client = get_redis()
@@ -247,6 +280,8 @@ def list_uploads(
     return {"total": total_count, "items": items, "limit": limit, "offset": offset}
 
 
+# --- Log summary (counts, severity buckets, top IPs, time range) ---
+
 @app.get("/logs/{log_id}/summary")
 def get_log_summary(
     log_id: int,
@@ -280,7 +315,7 @@ def get_log_summary(
     )
     alerts_by_type = [{"alert_type": t, "count": c} for t, c in alerts_by_type_rows]
 
-    # Severity buckets derived from confidence_score
+    # Severity: high >= 80, medium 60–79, low < 60 (same as /alerts)
     high = (
         db.query(func.count(models.Alert.id))
         .filter(models.Alert.log_id == log_id, models.Alert.confidence_score >= 80)
@@ -336,6 +371,8 @@ def get_log_summary(
     }
 
 
+# --- Alerts for a log (with optional log_entry preview) ---
+
 @app.get("/logs/{log_id}/alerts")
 def get_log_alerts(
     log_id: int,
@@ -347,6 +384,7 @@ def get_log_alerts(
         raise HTTPException(status_code=404, detail="Log not found")
 
     def severity(score: Optional[int]) -> str:
+        """Map confidence_score to high/medium/low (80 / 60 thresholds)."""
         s = score or 0
         if s >= 80:
             return "high"

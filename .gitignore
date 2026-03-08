@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Virtual environments
+venv/
+.env
+backend/venv/
+
+# Logs
+*.log
+
+# Upload folder (user-uploaded logs – do not commit)
+uploads/
+backend/uploads/
+
+# Node / Next.js
+node_modules/
+.next/
+
+# OS files
+.DS_Store
+Thumbs.db
